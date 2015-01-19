@@ -70,13 +70,9 @@ table below:
 | Variable  | Meaning |
 | --------- | ------- |
 | H-VERSION | The name and version of the `hamelin` daemon running.
-| H-TYPE    | The name and version of the connection type, for example,
-              `IRC-0.2` |
-| H-OPTIONS | These would correspond to the command-line options (for a web
-              server, you would get the host and port, for example). |
-| H-CLIENT  | Information about client. The content here depends on `H-TYPE`.
-              For a web browser, it might be the user-agent string. For IRC, it
-              could be the server/nick/channel. |
+| H-TYPE    | The name and version of the connection type, for example, `IRC-0.2` |
+| H-OPTIONS | These would correspond to the command-line options (for a web server, you would get the host and port, for example). |
+| H-CLIENT  | Information about client. The content here depends on `H-TYPE`. For a web browser, it might be the user-agent string. For IRC, it could be the server/nick/channel. |
 
 All of these are optional.
 
