@@ -12,6 +12,10 @@ import time
 class daemon:
     """ This is a template class to create a daemon. """
     def __init__(self, args):
+        """ Create a new daemon which runs `args` as a server. You should not
+            override this method. Run-time options should be configured as
+            arguments to `run`.
+        """
         self.args = args
     def run(self):
         """ Override this method to start a new daemon process. """
@@ -36,8 +40,14 @@ class server:
         
         To listen for events, *assign* to `handle_data`, `handle_error`, and
         `handle_quit` before running `startup`.
+
+        `hamelin.server` objects are *not* reusable. You can monitor its status
+        with the boolean attribute `alive`. If `alive` is False, the server is
+        either not yet listening or has exited.
     """
     def __init__(self, daemon, env):
+        """ Initializes a new server bound to a daemon and runing in an
+            environment. """
         self.daemon = daemon
         self.env = env
         self.alive = False
@@ -49,21 +59,27 @@ class server:
         self.write_queue = Queue.Queue()
 
     def startup(self):
-        self.process = subprocess.Popen(
-            self.daemon.args,
-            shell  = False,
-            stdin  = subprocess.PIPE,
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
-            env    = self.env
-        )
-        self.alive = True
-        self.thread = threading.Thread(
-            target = self.event_loop,
-            name   = "server-thread-[%s]"%(self.daemon.args[0])
-        )
-        self.thread.start()
+        """ Open the subprocess and start a thread to monitor its I/O. """
+        if not self.alive:
+            self.process = subprocess.Popen(
+                self.daemon.args,
+                shell  = False,
+                stdin  = subprocess.PIPE,
+                stdout = subprocess.PIPE,
+                stderr = subprocess.PIPE,
+                env    = self.env
+            )
+            self.alive = True
+            self.thread = threading.Thread(
+                target = self.event_loop,
+                name   = "server-thread-[%s]"%(self.daemon.args[0])
+            )
+            self.thread.start()
+        else:
+            raise Exception("Tried to startup a live process.")
     def event_loop(self):
+        """ This loop runs in a separate thread to provide safe,
+            semi-asynchronous I/O operations. """
         while self.alive:
             time.sleep(0) # yield thread
             poll = self.process.poll()
