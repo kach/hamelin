@@ -27,15 +27,18 @@ As a simple example, here's the `net` plugin in action:
     unfiltered
 
 `hamelin.py`, included with this file, is a reference implementation of a
-`hamelin`-compliant daemon. It is the Py'd Piper.
+`hamelin`-compliant daemon module. `net.py` implements a TCP socket-based
+daemon.
 
-## Specification v. 0.1
+## Specification v. 0.1 (unstable)
 
 `hamelin.py` follows the following specification. Alternative implementations
 are encouraged as long as they abide by the specification outlined below.
 
-The `hamelin` command runs a **daemon** process. The daemon should run
-continuously on the host machine.
+Phrases such as SHOULD, MUST, etc. are as per RFC 2119.
+
+The `hamelin` command runs a **daemon** process. The daemon runs continuously
+on the host machine.
 
 The daemon instantiates a new subprocess running your script for *every*
 "connection". This process is called a **server**. A connection could be any
@@ -51,34 +54,35 @@ Each connection is called a *client*.
 
 The daemon sends client data to the server's standard input (`stdin`). In
 addition, the server's standard output (`stdout`) is sent back to the client.
-This is line-buffered.
+All data MUST be line-buffered. The daemon MAY modify data to make it more
+suitable for a server, but it MUST clearly document these changes.
 
-Content in `stderr` is forwarded to the daemon's own `stderr` for debugging
-purposes.
+Content in `stderr` MUST be forwarded to the daemon's own `stderr` for
+debugging purposes. This content MUST NOT be modified when sent to `stderr`,
+but it MAY be intercepted and used for purposes such as informing the client of
+errors.
 
 The server process runs until either it exits or the client closes the
 connection (this event is obviously defined differently for each connection
-type). If the client closes the connection, the server is sent `SIGTERM`. If
-the server exits, the client connection is closed in an unspecified manner. If
-the server exits with a non-zero exit code, `hamelin` logs this to its
-`stderr`.
+type). If the client closes the connection, the server MUST be sent `SIGTERM`.
+Note that sending `SIGTERM` is no guarantee of terminating a process. If the
+server exits, the client connection is closed in an unspecified manner.  If the
+server exits with a status code that is not `0` or `SIGTERM`, the daemon SHOULD
+log this to `stderr`.
 
-A `hamelin` daemon sets certain environment variables for the subprocess, which
-provide metadata about the connection and setup. These are outlined in the
+A `hamelin` daemon SHOULD set certain environment variables for the subprocess,
+to provide metadata about the connection and setup. These are outlined in the
 table below:
 
 | Variable    | Meaning |
 | --------    | ------- |
 | `H-VERSION` | The name and version of the `hamelin` daemon running.
-| `H-TYPE`    | The name and version of the connection type, for example, `IRC-0.2` |
-| `H-OPTIONS` | These would correspond to the command-line options (for a web server, you would get the host and port, for example). |
+| `H-TYPE`    | The name and version of the connection type, for example, `IRC-0.2-INSECURE` |
 | `H-CLIENT`  | Information about client. The content here depends on `H-TYPE`. For a web browser, it might be the user-agent string. For IRC, it could be the server/nick/channel. |
 
-All of these are optional.
+Additional environment variables MAY be set depending on the daemon type. All
+`hamelin` environment variables MUST BE prefixed with `H-`.
 
-Additional environment variables are set depending on the daemon type. All
-`hamelin` environment variables are prefixed with `H-`.
-
-Finally, the daemon should pass along user-specified command-line arguments to
-the server *unchanged*. This provides the user with a means to modify the
-behavior of a server script without editing it.
+Finally, the daemon MUST pass along user-specified command-line arguments to
+the server *unchanged*, to provide the user with a means to modify the behavior
+of a server script without editing it.
