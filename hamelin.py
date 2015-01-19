@@ -10,11 +10,18 @@ import time
 """ The Py'd Piper of Hamelin """
 
 class daemon:
+    """ This is a template class to create a daemon. """
     def __init__(self, args):
         self.args = args
     def run(self):
-        pass # override me!
+        """ Override this method to start a new daemon process. """
+        pass
     def create_server(self, env=None):
+        """ Returns a new `hamelin.server` object bound to this daemon. The
+            optional argument `env` is a dictionary that allows you to set
+            environment variables that are *appended* to the environment the
+            daemon runs in.
+        """
         newenv = {}
         if env is not None:
             newenv = env
@@ -24,6 +31,12 @@ class daemon:
         return server(self, newenv)
 
 class server:
+    """ This is is a server process---it handles the process generated for
+        one connection.
+        
+        To listen for events, *assign* to `handle_data`, `handle_error`, and
+        `handle_quit` before running `startup`.
+    """
     def __init__(self, daemon, env):
         self.daemon = daemon
         self.env = env
@@ -93,22 +106,29 @@ class server:
     
     # Events
     def handle_data(self, text):
+        """ Called when the server prints to stdout. """
         print text # override me!
     def handle_error(self, text):
+        """ Called when the server prints to stderr, defaults to forwarding to
+            the daemon's stderr. """
         sys.stderr.write(text) # probably override me!
     def handle_quit(self, code):
+        """ Called when the server exits, with the exit code. """
         pass # override me!
     
     # Methods
     def send(self, text):
+        """ Send text to the server's stdin. """
         if not self.stdin_open:
             raise Exception("Tried to talk after sending EOF!")
         else:
             self.write_queue.put(text)
     def kill(self):
+        """ Send the server `SIGTERM`. """
         if self.alive:
             self.will_die = True
         else:
             raise Exception("Tried to kill dead process.")
     def eof(self):
+        """ Send the server `EOF`. """
         self.stdin_open = False 
