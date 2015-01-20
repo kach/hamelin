@@ -1,0 +1,27 @@
+{
+  "name": "hamelin",
+  "version": "0.0.1",
+  "description": "A hamelin-compliant daemon.",
+  "main": "hamelin.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/Hardmath123/hamelin"
+  },
+  "keywords": [
+    "daemon",
+    "server",
+    "pipe",
+    "stream",
+    "filter",
+    "hamelin"
+  ],
+  "author": "Hardmath123",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Hardmath123/hamelin/issues"
+  },
+  "homepage": "https://github.com/Hardmath123/hamelin"
+}
