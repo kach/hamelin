@@ -26,6 +26,21 @@ As a simple example, here's the `net` plugin in action:
     ultrafilterable
     unfiltered
 
+Or, here's a simple quoteDB/guestbook app written in 8 lines of code:
+```python
+import fileinput
+import sys
+print "Type your quote below. Hit ^D when done."
+sys.stdout.flush()
+f = open("/home/***/public_html/qdb.txt", "a")
+f.write("\n~~~~~~~\n\n")
+for line in fileinput.input():
+    f.write(line)
+    f.close()
+```
+
+    python hamelin/net.py localhost 8080 /usr/bin/python guestbook.py
+
 `hamelin.py`, included with this file, is a reference implementation of a
 `hamelin`-compliant daemon module. `net.py` implements a TCP socket-based
 daemon.
