@@ -39,11 +39,13 @@ for line in fileinput.input():
     f.close()
 ```
 
-    python hamelin/net.py localhost 8080 /usr/bin/python guestbook.py
+    hamelin-net localhost 8080 /usr/bin/python guestbook.py
 
-`hamelin.py`, included with this file, is a reference implementation of a
+`hamelin-py`, included with this repository, is a reference implementation of a
 `hamelin`-compliant daemon module. `net.py` implements a TCP socket-based
-daemon.
+daemon. For now, these can be installed with Python (see
+`/hamelin-py/README.md` for instructions), but a `hamelin` plugin manager is in
+the works.
 
 ## Specification v. 0.1 (unstable)
 
