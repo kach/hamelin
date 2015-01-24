@@ -5,9 +5,11 @@ import socket
 import select
 import errno
 
+import sys
+
 class netdaemon(hamelin.daemon):
     def run(self, host='', port=8080):
-        print "Running on port %d"%(port)
+        print "Running at host %s on port %d"%(host, port)
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((host, port))
         s.listen(5)
@@ -78,6 +80,16 @@ class netdaemon(hamelin.daemon):
                     print "Yikes."
                     serv.kill()
                     break
+
+def main():
+    if len(sys.argv) < 4:
+        print "Usage: hamelin-net [host] [port] [args...]"
+        exit(1)
+    
+    host = sys.argv[1]
+    port = int(sys.argv[2])
+    args = sys.argv[3:]
+    netdaemon(args).run(host=host, port=port)
 
 if __name__ == '__main__':
     d = netdaemon(['/usr/bin/grep', '--line-buffered', 'cow'])
