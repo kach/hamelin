@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import hamelin
 import time
 import threading
@@ -92,5 +94,4 @@ def main():
     netdaemon(args).run(host=host, port=port)
 
 if __name__ == '__main__':
-    d = netdaemon(['/usr/bin/grep', '--line-buffered', 'cow'])
-    d.run(port=8080)
+    main()
