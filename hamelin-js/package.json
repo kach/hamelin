@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "A hamelin-compliant daemon.",
   "main": "hamelin.js",
+  "bin": {
+    "hamelin": "bin/cli.js"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -23,5 +26,8 @@
   "bugs": {
     "url": "https://github.com/Hardmath123/hamelin/issues"
   },
-  "homepage": "https://github.com/Hardmath123/hamelin"
+  "homepage": "https://github.com/Hardmath123/hamelin",
+  "dependencies": {
+    "nomnom": "^1.8.1"
+  }
 }
