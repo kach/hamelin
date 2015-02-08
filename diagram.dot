@@ -1,0 +1,55 @@
+digraph hamelin {
+node[shape=box];
+rankdir=LR;
+    subgraph cluster0 {
+        style=dotted;
+        label="Clients";
+        client1 [label="TCP (netcat)"];
+        client2 [label="SSL (ncat)"];
+        client3 [label="IRC (query session)"];
+        client4 [label="HTTP (RESTful API)"];
+        client5 [label="WebSocket (browser)"];
+    }
+    subgraph cluster1 {
+        style=dotted;
+        label="Daemons (box = thread)";
+        daemon1 [label="TCP daemon (Python)"];
+        daemon2 [label="SSL daemon (Python)"];
+        daemon3 [label="IRC daemon (C)"];
+        daemon4 [label="HTTP daemon (nodeJS)"];
+        daemon5 [label="WS daemon (nodeJS)"];
+    }
+    subgraph cluster2 {
+        style=dotted;
+        label="Servers (box = process)";
+        server1 [label="Server"];
+        server2 [label="Server"];
+        server3 [label="Server"];
+        server4 [label="Server"];
+        server5 [label="Server"];
+    }
+    client1 -> daemon1 [label="query"];
+    daemon1 -> client1 [label="response"];
+    daemon1 -> server1 [label="stdin"];
+    server1 -> daemon1 [label="stdout"];
+
+    client2 -> daemon2 [label="query"];
+    daemon2 -> client2 [label="response"];
+    daemon2 -> server2 [label="stdin"];
+    server2 -> daemon2 [label="stdout"];
+
+    client3 -> daemon3 [label="query"];
+    daemon3 -> client3 [label="response"];
+    daemon3 -> server3 [label="stdin"];
+    server3 -> daemon3 [label="stdout"];
+
+    client4 -> daemon4 [label="query"];
+    daemon4 -> client4 [label="response"];
+    daemon4 -> server4 [label="stdin"];
+    server4 -> daemon4 [label="stdout"];
+
+    client5 -> daemon5 [label="query"];
+    daemon5 -> client5 [label="response"];
+    daemon5 -> server5 [label="stdin"];
+    server5 -> daemon5 [label="stdout"];
+}
