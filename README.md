@@ -49,8 +49,11 @@ Most `hamelin`-compliant interfaces function as a daemon that runs continuously
 on the host machine.
 
 The daemon instantiates a new subprocess running a given script for *every*
-"connection". This subprocess is called an instance of a **server**. A
-connection could be any form of input/output. Some possible examples are:
+"connection". This should be an actual forked subprocess, not a Popen process
+(Popen tends to dislike two-way communication, and has various security issues
+associated with the shell). This subprocess is called an instance of a
+**server**. A connection could be any form of input/output. Some possible
+examples are:
 
 - A user on a teletype (perhaps enhanced with `readline` or `curses`)
 - A telnet or plain socket server (perhaps enhanced with SSL)
