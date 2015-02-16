@@ -1,0 +1,77 @@
+#!/usr/bin/env python
+
+from lib import pyrcb
+import hamelin
+import socket
+import sys
+
+
+class IrcDaemon(hamelin.daemon):
+    def __init__(self, args):
+        hamelin.daemon.__init__(self, args)
+        self.hamelin_servers = {}
+        self.bot = pyrcb.IrcBot()
+        self.bot.on_message = self.on_irc_message
+
+    def start(self, host, port, nickname):
+        try:
+            self.bot.connect(host, port)
+            self.bot.register(nickname)
+            self.bot.listen()
+            print("Lost connection to IRC server. Killing servers.")
+        except socket.error:
+            print("Error communicating with IRC server. Killing servers.")
+
+        for key, serv in self.hamelin_servers.iteritems():
+            serv.serv.kill()
+
+    def update_servers(self):
+        self.hamelin_servers = {k: v for (k, v) in self.hamelin_servers.iteritems() if v.serv.alive}
+
+    def get_server(self, key):
+        if key not in self.hamelin_servers:
+            serv = self.create_server({
+                "H-VERSION": "HAMELIN.PY-IRC-0.1",
+                "H-TYPE": "IRC-0.1",
+                "H-CLIENT": key
+            })
+            self.hamelin_servers[key] = self.HamelinIrcServ(serv, self.bot, key)
+        return self.hamelin_servers[key]
+
+    def on_irc_message(self, message, nickname, target, is_query):
+        key = target.lower()
+        self.update_servers()
+
+        # If the message is "!start" and no server exists for the current target,
+        # start a new server instead of sending the message to stdin.
+        if message == "!start" and key not in self.hamelin_servers:
+            self.get_server(key)
+        else:
+            self.get_server(key).on_irc_message(message)
+
+    class HamelinIrcServ:
+        def __init__(self, serv, bot, target):
+            self.serv = serv
+            self.bot = bot
+            self.target = target
+            self.serv.handle_data = self.on_hamelin_message
+            self.serv.startup()
+
+        def on_irc_message(self, message):
+            print message
+            self.serv.send(message + "\n")
+
+        def on_hamelin_message(self, message):
+            self.bot.send(self.target, message[:-1])
+
+
+def main():
+    if len(sys.argv) < 5:
+        print "Usage: hamelin-net <host> <port> <nickname> <command> [args...]"
+        exit(1)
+
+    (host, port, nickname), args = sys.argv[1:4], sys.argv[4:]
+    IrcDaemon(args).start(host, int(port), nickname)
+
+if __name__ == "__main__":
+    main()
