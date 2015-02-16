@@ -106,12 +106,13 @@ class server:
                     1
                 )
                 if len(readable) > 0 and self.stdout_open:
-                    print "Reading!"
                     readable[0].flush()
                     line = readable[0].readline()
-                    print "Got", line[:-1]
+                    if line:
+                        print "Recieved from process: '{0}'".format(line[:-1])
                     if len(line) == 0:
                         self.stdout_open = False
+                        continue
                     self.handle_data(line)
                 if len(writable) > 0:
                     while not self.write_queue.empty():
