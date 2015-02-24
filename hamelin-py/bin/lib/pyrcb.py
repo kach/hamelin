@@ -17,7 +17,7 @@ from __future__ import print_function
 import socket
 
 
-class IrcBot:
+class IrcBot(object):
     def __init__(self, debug_print=False):
         self._buffer = ""
         self.socket = socket.socket()
