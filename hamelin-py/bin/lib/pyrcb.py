@@ -113,7 +113,7 @@ class IrcBot(object):
             if len(data) == 0:
                 self._cleanup()
                 return
-            self._buffer += data.decode("utf8")
+            self._buffer += data.decode("utf8", "ignore")
 
         line, self._buffer = self._buffer.split("\r\n", 1)
         if self.debug_print:
@@ -121,7 +121,7 @@ class IrcBot(object):
         return line
 
     def _writeline(self, data):
-        self.socket.sendall((data + "\r\n").encode("utf8"))
+        self.socket.sendall((data + "\r\n").encode("utf8", "ignore"))
         if self.debug_print:
             print(">>> " + data)
 
