@@ -15,6 +15,7 @@
 
 from __future__ import print_function
 import socket
+import threading
 
 
 class IrcBot(object):
@@ -60,13 +61,20 @@ class IrcBot(object):
 
     def send(self, target, message):
         self._writeline("PRIVMSG {0} :{1}".format(target, message))
-
+    
     def listen(self):
         while True:
             line = self._readline()
             if line is None:
                 return
             self._handle(line)
+
+    def listen_async(self, callback=None): 
+        def target():
+            self.listen()
+            if callback:
+                callback()
+        threading.Thread(target=target).start()
 
     def on_join(self, nickname, channel):
         # To be overridden
@@ -103,7 +111,7 @@ class IrcBot(object):
         elif command == "QUIT":
             self.on_quit(nickname)
         elif command == "PRIVMSG":
-            is_query = split[2] == self.nickname
+            is_query = split[2].lower() == self.nickname.lower()
             target = nickname if is_query else split[2]
             self.on_message(split[3][1:], nickname, target, is_query)
 
