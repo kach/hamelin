@@ -48,7 +48,8 @@ class IrcDaemon(hamelin.daemon):
                 "H-TYPE": "IRC-0.1",
                 "H-CLIENT": key
             })
-            self.hamelin_servers[key] = self.HamelinIrcServ(serv, self.bot, key)
+            hamelin_serv = self.HamelinIrcServ(serv, self.bot, key)
+            self.hamelin_servers[key] = hamelin_serv
         return self.hamelin_servers[key]
 
     def on_irc_message(self, message, nickname, target, is_query):

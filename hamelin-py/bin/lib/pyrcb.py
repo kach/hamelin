@@ -61,7 +61,7 @@ class IrcBot(object):
 
     def send(self, target, message):
         self._writeline("PRIVMSG {0} :{1}".format(target, message))
-    
+
     def listen(self):
         while True:
             line = self._readline()
@@ -69,7 +69,7 @@ class IrcBot(object):
                 return
             self._handle(line)
 
-    def listen_async(self, callback=None): 
+    def listen_async(self, callback=None):
         def target():
             self.listen()
             if callback:
@@ -99,7 +99,7 @@ class IrcBot(object):
         if split[0].upper() == "PING":
             self._writeline("PONG {0}".format(split[1]))
             return
-        
+
         nickname = split[0].split("!")[0].split("@")[0][1:]
         command = split[1].upper()
         if command == "MODE":
