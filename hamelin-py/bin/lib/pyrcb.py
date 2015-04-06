@@ -15,6 +15,7 @@
 
 from __future__ import print_function
 import socket
+import threading
 
 
 class IrcBot(object):
@@ -68,6 +69,13 @@ class IrcBot(object):
                 return
             self._handle(line)
 
+    def listen_async(self, callback=None):
+        def target():
+            self.listen()
+            if callback:
+                callback()
+        threading.Thread(target=target).start()
+
     def on_join(self, nickname, channel):
         # To be overridden
         pass
@@ -91,7 +99,7 @@ class IrcBot(object):
         if split[0].upper() == "PING":
             self._writeline("PONG {0}".format(split[1]))
             return
-        
+
         nickname = split[0].split("!")[0].split("@")[0][1:]
         command = split[1].upper()
         if command == "MODE":
@@ -103,7 +111,7 @@ class IrcBot(object):
         elif command == "QUIT":
             self.on_quit(nickname)
         elif command == "PRIVMSG":
-            is_query = split[2] == self.nickname
+            is_query = split[2].lower() == self.nickname.lower()
             target = nickname if is_query else split[2]
             self.on_message(split[3][1:], nickname, target, is_query)
 

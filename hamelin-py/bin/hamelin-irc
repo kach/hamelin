@@ -1,12 +1,13 @@
 #!/usr/bin/env python
-
 """
-Usage: hamelin-irc <host> <port> <nickname> [-c channel]...
-                   <prefix> <command> [--args args|<args>]...
+Usage:
+    hamelin-irc <host> <port> <nickname> [-c channel]...
+                <prefix> <command> [<args>|-a args]...
 
 Options:
   -c channel      An IRC channel to join.
-  --args args...  Arguments for <command> (this syntax allows dashes).
+  -a args         Arguments for <command>. This syntax
+                  can solve problems with dashes.
 """
 from lib.docopt import docopt
 from lib import pyrcb
@@ -18,7 +19,7 @@ class IrcDaemon(hamelin.daemon):
     def __init__(self, args, prefix):
         hamelin.daemon.__init__(self, args)
         self.hamelin_servers = {}
-        self.prefix = prefix
+        self.prefix = prefix + " "
         self.bot = pyrcb.IrcBot()
         self.bot.on_message = self.on_irc_message
 
@@ -37,7 +38,8 @@ class IrcDaemon(hamelin.daemon):
             serv.serv.kill()
 
     def update_servers(self):
-        self.hamelin_servers = {k: v for (k, v) in self.hamelin_servers.iteritems() if v.serv.alive}
+        self.hamelin_servers = {k: v for (k, v) in
+            self.hamelin_servers.iteritems() if v.serv.alive}
 
     def get_server(self, key):
         if key not in self.hamelin_servers:
@@ -46,19 +48,22 @@ class IrcDaemon(hamelin.daemon):
                 "H-TYPE": "IRC-0.1",
                 "H-CLIENT": key
             })
-            self.hamelin_servers[key] = self.HamelinIrcServ(serv, self.bot, key)
+            hamelin_serv = self.HamelinIrcServ(serv, self.bot, key)
+            self.hamelin_servers[key] = hamelin_serv
         return self.hamelin_servers[key]
 
     def on_irc_message(self, message, nickname, target, is_query):
-        if not message == self.prefix and not message.startswith(self.prefix + " "):
+        if message != self.prefix and not message.startswith(self.prefix):
             return
 
-        # If only the prefix is received, start the server but don't send anything to stdin.
+        # If only the prefix is received, start the server
+        # but don't send anything to stdin.
         self.update_servers()
         if message == self.prefix:
             self.get_server(target.lower())
         else:
-            self.get_server(target.lower()).on_irc_message(message.split(" ", 1)[1])
+            serv = self.get_server(target.lower())
+            serv.on_irc_message(message[len(self.prefix):])
 
     class HamelinIrcServ:
         def __init__(self, serv, bot, target):
