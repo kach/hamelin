@@ -14,7 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function
+import re
 import socket
+import ssl
 import threading
 
 
@@ -29,11 +31,18 @@ class IrcBot(object):
         self.is_registered = False
         self.nickname = None
         self.channels = []
+        self.alive = False
 
-    def connect(self, hostname, port):
+    def connect(self, hostname, port, use_ssl=False, ca_certs=None):
+        self._cleanup()
         self.hostname = hostname
         self.port = port
+        if use_ssl:
+            reqs = ssl.CERT_REQUIRED if ca_certs else ssl.CERT_NONE
+            self.socket = ssl.wrap_socket(
+                self.socket, cert_reqs=reqs, ca_certs=ca_certs)
         self.socket.connect((hostname, port))
+        self.alive = True
 
     def register(self, nickname):
         self.nickname = nickname
@@ -55,26 +64,50 @@ class IrcBot(object):
             self.channels.remove(channel.lower())
 
     def quit(self):
-        self._writeline("QUIT")
-        self.socket.shutdown(socket.SHUT_RDWR)
+        try:
+            self._writeline("QUIT")
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except socket.error:
+            pass
         self.socket.close()
+        self.alive = False
 
     def send(self, target, message):
         self._writeline("PRIVMSG {0} :{1}".format(target, message))
 
-    def listen(self):
+    def send_notice(self, target, message):
+        self._writeline("NOTICE {0} :{1}".format(target, message))
+
+    def send_raw(self, message):
+        self._writeline(message)
+
+    def listen(self, async_events=True):
         while True:
-            line = self._readline()
+            try:
+                line = self._readline()
+            except socket.error:
+                self.quit()
+                return
             if line is None:
                 return
-            self._handle(line)
+            if async_events:
+                t = threading.Thread(target=self._handle, args=[line])
+                t.daemon = True
+                t.start()
+            else:
+                self._handle(line)
 
-    def listen_async(self, callback=None):
+    def listen_async(self, callback=None, async_events=True):
         def target():
-            self.listen()
+            self.listen(async_events)
             if callback:
                 callback()
-        threading.Thread(target=target).start()
+        t = threading.Thread(target=target)
+        t.daemon = True
+        t.start()
+
+    def is_alive(self):
+        return self.alive
 
     def on_join(self, nickname, channel):
         # To be overridden
@@ -88,32 +121,54 @@ class IrcBot(object):
         # To be overridden
         pass
 
+    def on_kick(self, nickname, channel, target, is_self):
+        # To be overridden
+        pass
+
     def on_message(self, message, nickname, target, is_query):
         # To be overridden
         pass
 
-    def _handle(self, message):
-        split = message.split(" ", 3)
-        if len(split) < 2:
-            return
-        if split[0].upper() == "PING":
-            self._writeline("PONG {0}".format(split[1]))
-            return
+    def on_notice(self, message, nickname, target, is_query):
+        # To be overridden
+        pass
 
-        nickname = split[0].split("!")[0].split("@")[0][1:]
-        command = split[1].upper()
-        if command == "MODE":
+    def on_other(self, nickname, command, args):
+        # To be overridden
+        pass
+
+    def _handle(self, message):
+        match = re.match("(?::([^!@ ]+)[^ ]* )?([^ ]+)"
+                         "((?: [^: ][^ ]*){0,14})(?: :?(.+))?",
+                         message)
+
+        nick = match.group(1)
+        cmd = match.group(2)
+        args = (match.group(3) or "").split()
+        trailing = match.group(4)
+        if trailing:
+            args.append(trailing)
+
+        if cmd == "PING":
+            self._writeline("PONG " + args[0])
+        elif cmd == "MODE":
             self.is_registered = True
-        elif command == "JOIN":
-            self.on_join(nickname, split[2])
-        elif command == "PART":
-            self.on_part(nickname, split[2])
-        elif command == "QUIT":
-            self.on_quit(nickname)
-        elif command == "PRIVMSG":
-            is_query = split[2].lower() == self.nickname.lower()
-            target = nickname if is_query else split[2]
-            self.on_message(split[3][1:], nickname, target, is_query)
+        elif cmd == "JOIN":
+            self.on_join(nick, args[0])
+        elif cmd == "PART":
+            self.on_part(nick, args[0])
+        elif cmd == "QUIT":
+            self.on_quit(nick)
+        elif cmd == "KICK":
+            is_self = args[1].lower() == self.nickname.lower()
+            self.on_kick(nick, args[0], args[1], is_self)
+        elif cmd == "PRIVMSG" or cmd == "NOTICE":
+            is_query = args[0].lower() == self.nickname.lower()
+            target = nick if is_query else args[0]
+            event = self.on_message if cmd == "PRIVMSG" else self.on_notice
+            event(args[-1], nick, target, is_query)
+        else:
+            self.on_other(nick, cmd, args)
 
     def _readline(self):
         while "\r\n" not in self._buffer:
@@ -135,5 +190,5 @@ class IrcBot(object):
 
     def _cleanup(self):
         self._buffer = ""
-        self.registered = False
+        self.is_registered = False
         self.channels = []
