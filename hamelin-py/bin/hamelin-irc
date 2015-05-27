@@ -2,12 +2,10 @@
 """
 Usage:
     hamelin-irc <host> <port> <nickname> [-c channel]...
-                <prefix> <command> [<args>|-a args]...
+                <prefix> <command> [--] [<args>]...
 
 Options:
   -c channel      An IRC channel to join.
-  -a args         Arguments for <command>. This syntax
-                  can solve problems with dashes.
 """
 from lib.docopt import docopt
 from lib import pyrcb
@@ -38,8 +36,9 @@ class IrcDaemon(hamelin.daemon):
             serv.serv.kill()
 
     def update_servers(self):
-        self.hamelin_servers = {k: v for (k, v) in
-            self.hamelin_servers.iteritems() if v.serv.alive}
+        self.hamelin_servers = {
+            k: v for (k, v) in self.hamelin_servers.iteritems() if v.serv.alive
+        }
 
     def get_server(self, key):
         if key not in self.hamelin_servers:
@@ -81,8 +80,8 @@ class IrcDaemon(hamelin.daemon):
 
 
 def main():
-    args = docopt(__doc__, version="0.1")
-    command = [args["<command>"]] + args["--args"] + args["<args>"]
+    args = docopt(__doc__, version="0.2")
+    command = [args["<command>"]] + args["<args>"]
     prefix = args["<prefix>"]
     host = args["<host>"]
     port = int(args["<port>"])
