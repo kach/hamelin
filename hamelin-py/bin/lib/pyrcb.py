@@ -133,7 +133,7 @@ class IrcBot(object):
         # To be overridden
         pass
 
-    def on_other(self, nickname, command, args, trailing):
+    def on_other(self, nickname, command, args):
         # To be overridden
         pass
 
@@ -146,6 +146,8 @@ class IrcBot(object):
         cmd = match.group(2)
         args = (match.group(3) or "").split()
         trailing = match.group(4)
+        if trailing:
+            args.append(trailing)
 
         if cmd == "PING":
             self._writeline("PONG " + args[0])
@@ -164,9 +166,9 @@ class IrcBot(object):
             is_query = args[0].lower() == self.nickname.lower()
             target = nick if is_query else args[0]
             event = self.on_message if cmd == "PRIVMSG" else self.on_notice
-            event(trailing, nick, target, is_query)
+            event(args[-1], nick, target, is_query)
         else:
-            self.on_other(nick, cmd, args, trailing)
+            self.on_other(nick, cmd, args)
 
     def _readline(self):
         while "\r\n" not in self._buffer:
