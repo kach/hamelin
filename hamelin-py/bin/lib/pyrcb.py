@@ -19,20 +19,24 @@ import socket
 import ssl
 import threading
 
+__version__ = "1.0.0"
+
 
 class IrcBot(object):
-    def __init__(self, debug_print=False):
+    def __init__(self, debug_print=False, print_function=print):
+        self.debug_print = debug_print
+        self.print_function = print_function
+
         self._buffer = ""
         self.socket = socket.socket()
         self.hostname = None
         self.port = None
 
-        self.debug_print = debug_print
-        self.is_registered = False
-        self.nickname = None
+        self._names = []
         self.channels = []
         self.alive = False
-        self._names = []
+        self.is_registered = False
+        self.nickname = None
 
     def connect(self, hostname, port, use_ssl=False, ca_certs=None):
         self._cleanup()
@@ -88,7 +92,7 @@ class IrcBot(object):
     def send_raw(self, message):
         self._writeline(message)
 
-    def listen(self, async_events=True):
+    def listen(self, async_events=False):
         while True:
             try:
                 line = self._readline()
@@ -104,7 +108,7 @@ class IrcBot(object):
             else:
                 self._handle(line)
 
-    def listen_async(self, callback=None, async_events=True):
+    def listen_async(self, callback=None, async_events=False):
         def target():
             self.listen(async_events)
             if callback:
@@ -149,8 +153,8 @@ class IrcBot(object):
         pass
 
     def _handle(self, message):
-        match = re.match("(?::([^!@ ]+)[^ ]* )?([^ ]+)"
-                         "((?: [^: ][^ ]*){0,14})(?: :?(.+))?",
+        match = re.match(r"(?::([^!@ ]+)[^ ]* )?([^ ]+)"
+                         r"((?: [^: ][^ ]*){0,14})(?: :?(.+))?",
                          message)
 
         nick = match.group(1)
@@ -198,13 +202,13 @@ class IrcBot(object):
 
         line, self._buffer = self._buffer.split("\r\n", 1)
         if self.debug_print:
-            print(line)
+            self.print_function(line)
         return line
 
     def _writeline(self, data):
         self.socket.sendall((data + "\r\n").encode("utf8", "ignore"))
         if self.debug_print:
-            print(">>> " + data)
+            self.print_function(">>> " + data)
 
     def _cleanup(self):
         self._buffer = ""
