@@ -20,7 +20,7 @@ import socket
 import ssl
 import threading
 
-__version__ = "1.2.0"
+__version__ = "1.4.2"
 
 
 class IrcBot(object):
@@ -51,6 +51,9 @@ class IrcBot(object):
         self.socket.connect((hostname, port))
         self.alive = True
 
+    def password(self, password):
+        self._writeline("PASS :{0}".format(password))
+
     def register(self, nickname):
         self.nickname = nickname
         self._writeline("USER {0} 8 * :{0}".format(nickname))
@@ -59,10 +62,11 @@ class IrcBot(object):
             line = self._readline()
             if line is None:
                 return
+            if self._parse(line)[1] == "433":  # ERR_NICKNAMEINUSE
+                raise ValueError("Nickname is already in use")
             self._handle(line)
 
     def join(self, channel):
-        self.channels.append(channel.lower())
         self._writeline("JOIN {0}".format(channel))
 
     def part(self, channel, message=None):
@@ -81,6 +85,9 @@ class IrcBot(object):
         self.socket.close()
         self.alive = False
 
+    def nick(self, new_nickname):
+        self._writeline("NICK {0}".format(new_nickname))
+
     def names(self, channel):
         if not channel.isspace():
             self._writeline("NAMES {0}".format(channel))
@@ -93,6 +100,33 @@ class IrcBot(object):
 
     def send_raw(self, message):
         self._writeline(message)
+
+    def on_join(self, nickname, channel):
+        pass
+
+    def on_part(self, nickname, channel, message):
+        pass
+
+    def on_quit(self, nickname, message):
+        pass
+
+    def on_kick(self, nickname, channel, target, is_self):
+        pass
+
+    def on_nick(self, nickname, new_nickname, is_self):
+        pass
+
+    def on_names(self, channel, names):
+        pass
+
+    def on_message(self, message, nickname, target, is_query):
+        pass
+
+    def on_notice(self, message, nickname, target, is_query):
+        pass
+
+    def on_other(self, nickname, command, args):
+        pass
 
     def listen(self, async_events=False):
         while True:
@@ -118,38 +152,6 @@ class IrcBot(object):
     def is_alive(self):
         return self.alive
 
-    def on_join(self, nickname, channel):
-        # To be overridden
-        pass
-
-    def on_part(self, nickname, channel, message):
-        # To be overridden
-        pass
-
-    def on_quit(self, nickname, message):
-        # To be overridden
-        pass
-
-    def on_kick(self, nickname, channel, target, is_self):
-        # To be overridden
-        pass
-
-    def on_names(self, channel, names):
-        # To be overridden
-        pass
-
-    def on_message(self, message, nickname, target, is_query):
-        # To be overridden
-        pass
-
-    def on_notice(self, message, nickname, target, is_query):
-        # To be overridden
-        pass
-
-    def on_other(self, nickname, command, args):
-        # To be overridden
-        pass
-
     def _handle(self, message, async_events=False):
         def async(target, *args):
             if async_events:
@@ -158,21 +160,27 @@ class IrcBot(object):
                 target(*args)
 
         nick, cmd, args = self._parse(message)
+        is_self = (nick or "").lower() == self.nickname.lower()
+
         if cmd == "PING":
             self._writeline("PONG :{0}".format(args[0]))
         elif cmd == "MODE":
             self.is_registered = True
         elif cmd == "JOIN":
+            if is_self:
+                self.channels.append(args[0])
             async(self.on_join, nick, args[0])
         elif cmd == "PART":
-            async(self.on_part, nick, args[0], args[1])
+            async(self.on_part, nick, args[0], (args[1:] or [""])[0])
         elif cmd == "QUIT":
-            async(self.on_quit, nick, args[0])
+            async(self.on_quit, nick, (args or [""])[0])
         elif cmd == "KICK":
             is_self = args[1].lower() == self.nickname.lower()
             async(self.on_kick, nick, args[0], args[1], is_self)
-        elif cmd == "433":  # ERR_NICKNAMEINUSE
-            raise ValueError("Nickname is already in use")
+        elif cmd == "NICK":
+            if is_self:
+                self.nickname = args[0]
+            async(self.on_nick, nick, args[0], is_self)
         elif cmd == "353":  # RPL_NAMREPLY
             names = args[-1].replace("@", "").replace("+", "").split()
             self._names.append((args[-2], names))
