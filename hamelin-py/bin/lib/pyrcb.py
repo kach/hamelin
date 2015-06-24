@@ -14,20 +14,31 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function
+from collections import defaultdict
 from multiprocessing.pool import ThreadPool
+from queue import Queue
 import re
 import socket
 import ssl
 import threading
+import time
 
-__version__ = "1.4.2"
+__version__ = "1.5.0"
 
 
 class IrcBot(object):
-    def __init__(self, debug_print=False, print_function=print):
+    def __init__(self, debug_print=False, print_function=print, delay=True):
         self.debug_print = debug_print
         self.print_function = print_function
+        self.delay = delay
+
+    def _init(self):
         self.thread_pool = ThreadPool(processes=16)
+        self.listen_thread = None
+
+        self._queue = Queue()
+        self.last_message = defaultdict(lambda: [0, 0])
+        # Format: self.last_message[username] = [time, consecutive_messages]
 
         self._buffer = ""
         self.socket = socket.socket()
@@ -41,9 +52,13 @@ class IrcBot(object):
         self.nickname = None
 
     def connect(self, hostname, port, use_ssl=False, ca_certs=None):
-        self._cleanup()
+        self._init()
         self.hostname = hostname
         self.port = port
+        if self.delay:
+            t = threading.Thread(target=self._queue_loop)
+            t.daemon = True
+            t.start()
         if use_ssl:
             reqs = ssl.CERT_REQUIRED if ca_certs else ssl.CERT_NONE
             self.socket = ssl.wrap_socket(
@@ -93,7 +108,11 @@ class IrcBot(object):
             self._writeline("NAMES {0}".format(channel))
 
     def send(self, target, message):
-        self._writeline("PRIVMSG {0} :{1}".format(target, message))
+        irc_msg = "PRIVMSG {0} :{1}".format(target, message)
+        if self.delay:
+            self._queue.put((target, irc_msg))
+        else:
+            self._writeline(irc_msg)
 
     def send_notice(self, target, message):
         self._writeline("NOTICE {0} :{1}".format(target, message))
@@ -101,7 +120,7 @@ class IrcBot(object):
     def send_raw(self, message):
         self._writeline(message)
 
-    def on_join(self, nickname, channel):
+    def on_join(self, nickname, channel, is_self):
         pass
 
     def on_part(self, nickname, channel, message):
@@ -136,6 +155,7 @@ class IrcBot(object):
                 self.quit()
                 return
             if line is None:
+                self._queue.put(None)
                 return
             else:
                 self._handle(line)
@@ -145,9 +165,13 @@ class IrcBot(object):
             self.listen(async_events)
             if callback:
                 callback()
-        t = threading.Thread(target=target)
-        t.daemon = True
-        t.start()
+        self.listen_thread = threading.Thread(target=target)
+        self.listen_thread.daemon = True
+        self.listen_thread.start()
+
+    def wait(self):
+        if self.listen_thread:
+            self.listen_thread.join()
 
     def is_alive(self):
         return self.alive
@@ -169,7 +193,7 @@ class IrcBot(object):
         elif cmd == "JOIN":
             if is_self:
                 self.channels.append(args[0])
-            async(self.on_join, nick, args[0])
+            async(self.on_join, nick, args[0], is_self)
         elif cmd == "PART":
             async(self.on_part, nick, args[0], (args[1:] or [""])[0])
         elif cmd == "QUIT":
@@ -209,11 +233,28 @@ class IrcBot(object):
             args.append(trailing)
         return (nick, cmd, args)
 
+    def _queue_loop(self):
+        while True:
+            item = self._queue.get()
+            if not item:
+                break
+
+            target, message = item
+            last, num = self.last_message[target]
+            last_delta = time.time() - last
+            if last_delta >= 5:
+                num = 0
+
+            delay = min(num / 10, 1.5)
+            self._writeline(message)
+            self.last_message[target] = (time.time(), num + 1)
+            if delay > 0:
+                time.sleep(delay)
+
     def _readline(self):
         while "\r\n" not in self._buffer:
             data = self.socket.recv(1024)
             if len(data) == 0:
-                self._cleanup()
                 return
             self._buffer += data.decode("utf8", "ignore")
 
@@ -226,8 +267,3 @@ class IrcBot(object):
         self.socket.sendall((data + "\r\n").encode("utf8", "ignore"))
         if self.debug_print:
             self.print_function(">>> " + data)
-
-    def _cleanup(self):
-        self._buffer = ""
-        self.is_registered = False
-        self.channels = []
