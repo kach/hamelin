@@ -16,14 +16,14 @@
 from __future__ import print_function
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
-from queue import Queue
+import errno
 import re
 import socket
 import ssl
 import threading
 import time
 
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 
 
 class IrcBot(object):
@@ -32,13 +32,17 @@ class IrcBot(object):
         self.print_function = print_function
         self.delay = delay
 
+    # Initializes instance variables.
     def _init(self):
         self.thread_pool = ThreadPool(processes=16)
         self.listen_thread = None
 
-        self._queue = Queue()
-        self.last_message = defaultdict(lambda: [0, 0])
-        # Format: self.last_message[username] = [time, consecutive_messages]
+        self._delay_event = threading.Event()
+        self._messages = []
+        self.last_message = defaultdict(lambda: (0, 0))
+        # Format:
+        #   self._messages[number] = (time, text)
+        #   self.last_message[target] = (time, consecutive)
 
         self._buffer = ""
         self.socket = socket.socket()
@@ -55,16 +59,17 @@ class IrcBot(object):
         self._init()
         self.hostname = hostname
         self.port = port
-        if self.delay:
-            t = threading.Thread(target=self._queue_loop)
-            t.daemon = True
-            t.start()
         if use_ssl:
             reqs = ssl.CERT_REQUIRED if ca_certs else ssl.CERT_NONE
             self.socket = ssl.wrap_socket(
                 self.socket, cert_reqs=reqs, ca_certs=ca_certs)
+
         self.socket.connect((hostname, port))
         self.alive = True
+        if self.delay:
+            t = threading.Thread(target=self._delay_loop)
+            t.daemon = True
+            t.start()
 
     def password(self, password):
         self._writeline("PASS :{0}".format(password))
@@ -94,10 +99,10 @@ class IrcBot(object):
         try:
             quit_msg = " :" + message if message else ""
             self._writeline("QUIT{0}".format(quit_msg))
-            self.socket.shutdown(socket.SHUT_RDWR)
-        except socket.error:
-            pass
-        self.socket.close()
+        except socket.error as e:
+            if e.errno != errno.EPIPE:
+                raise
+        self._close_socket()
         self.alive = False
 
     def nick(self, new_nickname):
@@ -108,14 +113,10 @@ class IrcBot(object):
             self._writeline("NAMES {0}".format(channel))
 
     def send(self, target, message):
-        irc_msg = "PRIVMSG {0} :{1}".format(target, message)
-        if self.delay:
-            self._queue.put((target, irc_msg))
-        else:
-            self._writeline(irc_msg)
+        self._add_delayed(target, "PRIVMSG {0} :{1}".format(target, message))
 
     def send_notice(self, target, message):
-        self._writeline("NOTICE {0} :{1}".format(target, message))
+        self._add_delayed(target, "NOTICE {0} :{1}".format(target, message))
 
     def send_raw(self, message):
         self._writeline(message)
@@ -151,11 +152,13 @@ class IrcBot(object):
         while True:
             try:
                 line = self._readline()
-            except socket.error:
-                self.quit()
-                return
+            except socket.error as e:
+                if e.errno == errno.EPIPE:
+                    self._close_socket()
+                    return
+                raise
             if line is None:
-                self._queue.put(None)
+                self._close_socket()
                 return
             else:
                 self._handle(line)
@@ -176,6 +179,8 @@ class IrcBot(object):
     def is_alive(self):
         return self.alive
 
+    # Parses an IRC message and calls the appropriate event,
+    # starting it on a new thread if requested.
     def _handle(self, message, async_events=False):
         def async(target, *args):
             if async_events:
@@ -222,7 +227,9 @@ class IrcBot(object):
         else:
             async(self.on_other, nick, cmd, args)
 
+    # Parses an IRC message.
     def _parse(self, message):
+        # Regex to parse IRC messages
         match = re.match(r"(?::([^!@ ]+)[^ ]* )?([^ ]+)"
                          r"((?: [^: ][^ ]*){0,14})(?: :?(.+))?",
                          message)
@@ -233,24 +240,42 @@ class IrcBot(object):
             args.append(trailing)
         return (nick, cmd, args)
 
-    def _queue_loop(self):
-        while True:
-            item = self._queue.get()
-            if not item:
-                break
-
-            target, message = item
-            last, num = self.last_message[target]
-            last_delta = time.time() - last
-            if last_delta >= 5:
-                num = 0
-
-            delay = min(num / 10, 1.5)
+    # Adds a delayed message, or sends the message if delays are off.
+    def _add_delayed(self, target, message):
+        if not self.delay:
             self._writeline(message)
-            self.last_message[target] = (time.time(), num + 1)
-            if delay > 0:
-                time.sleep(delay)
+            return
 
+        last_time, consecutive = self.last_message[target]
+        last_delta = time.time() - last_time
+        if last_delta >= 5:
+            consecutive = 0
+
+        delay = min(consecutive / 10, 1.5)
+        message_time = max(last_time, time.time()) + delay
+        self.last_message[target] = (message_time, consecutive + 1)
+
+        self._messages.append((message_time, message))
+        self._delay_event.set()
+
+    # Sends delayed messages at the appropriate time.
+    def _delay_loop(self):
+        while self.alive:
+            self._delay_event.clear()
+            if any(self._messages):
+                # Get message with the lowest time.
+                message_time, message = min(self._messages)
+                delay = message_time - time.time()
+
+                # If there is no delay or the program finishes
+                # waiting for the delay, send the message.
+                if delay <= 0 or not self._delay_event.wait(timeout=delay):
+                    self._writeline(message)
+                    self._messages.remove((message_time, message))
+            else:
+                self._delay_event.wait()
+
+    # Reads a line from the socket.
     def _readline(self):
         while "\r\n" not in self._buffer:
             data = self.socket.recv(1024)
@@ -263,7 +288,19 @@ class IrcBot(object):
             self.print_function(line)
         return line
 
+    # Writes a line to the socket.
     def _writeline(self, data):
         self.socket.sendall((data + "\r\n").encode("utf8", "ignore"))
         if self.debug_print:
             self.print_function(">>> " + data)
+
+    # Closes the socket.
+    def _close_socket(self):
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+            self.socket.close()
+        except socket.error as e:
+            if e.errno != errno.EPIPE:
+                raise
+        self.alive = False
+        self._delay_event.set()
