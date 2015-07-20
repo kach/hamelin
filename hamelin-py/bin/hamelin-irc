@@ -5,8 +5,9 @@ Usage:
                 <prefix> <command> [--] [<args>]...
 
 Options:
-  -c channel      An IRC channel to join.
+  -c <channel>  An IRC channel to join.
 """
+from __future__ import print_function
 from lib.docopt import docopt
 from lib import pyrcb
 import hamelin
